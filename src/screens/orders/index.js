@@ -24,13 +24,13 @@ const Header = ({ reverse }) => (
   </View>
 );
 
-const RowItem = ({ reverse }) => (
+const RowItem = ({ reverse, price, amount }) => (
   <View style={styles.orderRow}>
     <View style={styles.header}>
-      <RegularText title={reverse ? '41,340' : '0.040'} />
+      <RegularText title={reverse ? price : amount} />
     </View>
     <View style={styles.header}>
-      <RegularText title={reverse ? '0.040' : '41,340'} />
+      <RegularText title={reverse ? amount : price} />
     </View>
   </View>
 );
@@ -123,10 +123,6 @@ class Orders extends Component {
             }
           }
           this.setState({ BOOK: state });
-
-          // if (!exists) {
-          //   fs.appendFileSync(logfile, '[' + moment().format() + '] ' + pair + ' | ' + JSON.stringify(pp) + ' BOOK delete fail side not found\n')
-          // }
         } else {
           const state = BOOK;
           let side = pp.amount >= 0 ? 'bids' : 'asks';
@@ -139,17 +135,36 @@ class Orders extends Component {
       // setState({ BOOK: arm });
 
       const state = BOOK;
-      state.mcnt += 1;
       // this.setState({ BOOK: state });
+
+      ['bids', 'asks'].forEach(side => {
+        let bookSide = state[side];
+        let bookPrices = Object.keys(bookSide);
+
+        let prices = bookPrices.sort(function (a, b) {
+          if (side === 'bids') {
+            return +a >= +b ? -1 : 1;
+          } else {
+            return +a <= +b ? -1 : 1;
+          }
+        });
+
+        state.psnap[side] = prices;
+      });
+      state.mcnt += 1;
+
       this.props.updateState(state);
     };
-
-    // console.log('book', BOOK);
   }
 
+  // TODO :
+
+  // ADD TIMEOUT to reduce update
+
   render() {
-    console.log('props', this.props.bids);
-    console.log('ASKprops', this.props.asks);
+    console.log('props', this.props.psnap);
+    const { asks, bids, psnap } = this.props;
+    console.log('PSNAP', psnap);
     return (
       <>
         <StatusBar />
@@ -166,20 +181,34 @@ class Orders extends Component {
           <View style={styles.orderContainer}>
             <View style={styles.orderGrid}>
               <Header />
-              <RowItem />
-              <RowItem />
-              <RowItem />
-              <RowItem />
-              <RowItem />
+              {psnap.bids ? (
+                psnap.bids.map((price, index) => {
+                  if (index < 11)
+                    return (
+                      <RowItem price={price} amount={bids[price].amount} />
+                    );
+                })
+              ) : (
+                <View />
+              )}
             </View>
 
             <View style={styles.orderGrid}>
               <Header reverse />
-              <RowItem />
-              <RowItem />
-              <RowItem />
-              <RowItem />
-              <RowItem />
+              {psnap.asks ? (
+                psnap.asks.map((price, index) => {
+                  if (index < 11)
+                    return (
+                      <RowItem
+                        price={price}
+                        amount={asks[price].amount}
+                        reverse
+                      />
+                    );
+                })
+              ) : (
+                <View />
+              )}
             </View>
           </View>
         </View>
