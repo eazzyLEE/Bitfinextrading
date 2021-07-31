@@ -1,12 +1,11 @@
-import React from "react";
-import { View, Text } from "react-native";
+import React from 'react';
+import { View, Text, SafeAreaView } from 'react-native';
+import Orders from './screens/orders';
 
-const App = () => {
-  return (
-    <View>
-      <Text></Text>
-    </View>
-  );
-};
+const App = () => (
+  <SafeAreaView>
+    <Orders />
+  </SafeAreaView>
+);
 
 export default App;
