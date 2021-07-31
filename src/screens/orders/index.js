@@ -9,19 +9,9 @@ import {
 } from '../../components';
 import { orderStyles as styles } from './styles';
 import { object } from 'prop-types';
-
-// import ws from 'ws';
-// const w = new ws('wss://api-pub.bitfinex.com/ws/2');
-
-// w.on('message', msg => console.log(msg));
-
-// let msg = JSON.stringify({
-//   event: 'subscribe',
-//   channel: 'book',
-//   symbol: 'tBTCUSD',
-// });
-
-// w.on('open', () => w.send(msg));
+import { store } from '../../store';
+import { connect } from 'react-redux';
+import { updateState } from '../../store/actions/tradeAction';
 
 const Header = ({ reverse }) => (
   <View style={styles.orderColumn}>
@@ -45,12 +35,16 @@ const RowItem = ({ reverse }) => (
   </View>
 );
 
-export default class Orders extends Component {
+class Orders extends Component {
   state = {
-    BOOK: {},
+    BOOK: {
+      bids: this.props.bids || {},
+      asks: this.props.asks || {},
+      psnap: this.props.psnap || {},
+      mcnt: this.props.mcnt || 0,
+    },
   };
 
-  BOOK = {};
   seq = null;
 
   componentDidMount() {
@@ -65,42 +59,97 @@ export default class Orders extends Component {
         prec: 'P0',
       });
       console.log('WS open');
-      // connecting = false;
-      // connected = true;
-      // this.state.BOOK.bids = {};
-      // this.state.BOOK.asks = {};
-      // this.state.BOOK.psnap = {};
       socket.send(msg);
     };
 
     socket.onmessage = msg => {
-      let arm = this.state.BOOK;
-      arm.bids = {};
-      arm.asks = {};
-      arm.psnap = {};
-      // console.log('sock', msg);
+      const { BOOK } = this.state;
 
+      // when count > 0 then you have to add or update the price level
+      // 3.1 if amount > 0 then add/update bids
+      // 3.2 if amount < 0 then add/update asks
+      // when count = 0 then you have to delete the price level.
+      // 4.1 if amount = 1 then remove from bids
+      // 4.2 if amount = -1 then remove from asks
+
+      console.log('mrg', msg);
       msg = JSON.parse(msg.data);
-      // console.log('msgCHECK', msg[1]);
-      // if (msg.event) return;
-      each(msg[1], function (pp) {
-        if (typeof pp === 'object') {
-          // console.log('PP', typeof msg[1], pp);
-          // console.log('arm', arm);
-          pp = { price: pp[0], cnt: pp[1], amount: pp[2] };
-          console.log('armxx', pp);
-          const side = pp.amount >= 0 ? 'bids' : 'asks';
+      if (msg.event) return;
+
+      if (BOOK.mcnt === 0) {
+        // console.log('xxcxc', msg);
+        // console.log('xop', msg[1]);
+        if (msg[1] !== undefined && typeof msg[1] === 'object') {
+          console.log('msg', msg[1]);
+          msg[1].forEach(element => {
+            console.log('el', element);
+            // console.log('pp', element);
+            let el = element;
+            if (el !== undefined && typeof el === 'object') {
+              let pp = { price: el[0], cnt: el[1], amount: el[2] };
+              // console.log('armxx', pp);
+              const side = pp.amount >= 0 ? 'bids' : 'asks';
+              pp.amount = Math.abs(pp.amount);
+
+              BOOK[side][pp.price] = pp;
+              const state = BOOK;
+              state[side][pp.price] = pp;
+
+              this.setState({ BOOK: state });
+            }
+          });
+        }
+      } else {
+        let pp = msg[1];
+        // console.log('pxxc', pp);
+        const state = BOOK;
+
+        pp = { price: pp[0], cnt: pp[1], amount: pp[2] };
+        // count is zero
+        if (!pp.cnt) {
+          let exists = true;
+
+          if (pp.amount > 0) {
+            if (state['bids'][pp.price]) {
+              delete state['bids'][pp.price];
+            } else {
+              exists = false;
+            }
+          } else if (pp.amount < 0) {
+            if (state['asks'][pp.price]) {
+              delete state['asks'][pp.price];
+            } else {
+              exists = false;
+            }
+          }
+          this.setState({ BOOK: state });
+
+          // if (!exists) {
+          //   fs.appendFileSync(logfile, '[' + moment().format() + '] ' + pair + ' | ' + JSON.stringify(pp) + ' BOOK delete fail side not found\n')
+          // }
+        } else {
+          const state = BOOK;
+          let side = pp.amount >= 0 ? 'bids' : 'asks';
           pp.amount = Math.abs(pp.amount);
 
-          arm[side][pp.price] = pp;
+          state[side][pp.price] = pp;
+          this.setState({ BOOK: state });
         }
-      });
-      this.setState({ BOOK: arm });
+      }
+      // setState({ BOOK: arm });
+
+      const state = BOOK;
+      state.mcnt += 1;
+      // this.setState({ BOOK: state });
+      this.props.updateState(state);
     };
+
+    // console.log('book', BOOK);
   }
 
   render() {
-    // console.log('book', this.state.BOOK);
+    console.log('props', this.props.bids);
+    console.log('ASKprops', this.props.asks);
     return (
       <>
         <StatusBar />
@@ -138,3 +187,16 @@ export default class Orders extends Component {
     );
   }
 }
+
+const mapStateToTrops = state => ({
+  bids: state.trades.book.bids,
+  asks: state.trades.book.asks,
+  psnap: state.trades.book.psnap,
+  mcnt: state.trades.book.mcnt,
+});
+
+const mapDispatchToProps = {
+  updateState,
+};
+
+export default connect(mapStateToTrops, mapDispatchToProps)(Orders);
